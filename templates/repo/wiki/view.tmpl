@@ -66,8 +66,8 @@
 					{{if and .CanWriteWiki (not .Repository.IsMirror)}}
 						<div class="ui right">
 							<a class="ui small button" href="{{.RepoLink}}/wiki/{{.PageURL}}/_edit">{{.i18n.Tr "repo.wiki.edit_page_button"}}</a>
-							<a class="ui green small button" href="{{.RepoLink}}/wiki/_new">{{.i18n.Tr "repo.wiki.new_page_button"}}</a>
-							<a class="ui red small button delete-button" href="" data-url="{{.RepoLink}}/wiki/{{.PageURL}}/delete" data-id="{{.PageURL}}">{{.i18n.Tr "repo.wiki.delete_page_button"}}</a>
+							<a class="ui green small button" href="{{.RepoLink}}/wiki/{{.PageURL}}/_new">{{.i18n.Tr "repo.wiki.new_page_button"}}</a>
+							<a class="ui red small button delete-button" href="" data-url="{{.RepoLink}}/wiki/{{.PageURL}}/_delete" data-id="{{.PageURL}}">{{.i18n.Tr "repo.wiki.delete_page_button"}}</a>
 						</div>
 					{{end}}
 				</div>
@@ -79,7 +79,7 @@
 			</div>
 		{{end}}
 		<div class="ui {{if .sidebarPresent}}grid equal width{{end}}" style="margin-top: 1rem;">
-			<div class="ui {{if .sidebarPresent}}eleven wide column{{end}} segment markdown has-emoji">
+			<div class="ui {{if .sidebarPresent}}eleven wide column{{end}} segment markdown has-emoji{{if (.Repository.TocWikiFile)}} auto-toc{{end}}{{if (.Repository.TocWikiTree)}} page-toc{{end}}"{{if .Repository.TocWikiFile}} data-toc="{{.i18n.Tr "repo.settings.toc.toc"}}"{{end}}{{if .Repository.TocWikiTree}} data-pagetoc="{{.i18n.Tr "repo.settings.toc.pagetoc"}}"{{end}}>
 				{{.content | Str2html}}
 			</div>
 			{{if .sidebarPresent}}

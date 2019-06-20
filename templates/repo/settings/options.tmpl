@@ -263,6 +263,37 @@
 				{{end}}
 
 				<div class="ui divider"></div>
+
+				<div class="toc_box">
+					<div class="field">
+						<label>{{.i18n.Tr "repo.settings.toc.toc"}}</label>
+						<div class="field">
+							<div class="ui checkbox">
+								<input name="toc_wiki_tree" type="checkbox" {{if (.Repository.TocWikiTree)}}checked{{end}}>
+								<label>{{.i18n.Tr "repo.settings.toc.toc_wiki_tree"}}</label>
+							</div>
+						</div>
+						<div class="field">
+							<div class="ui checkbox">
+								<input name="toc_wiki_file" type="checkbox" {{if (.Repository.TocWikiFile)}}checked{{end}}>
+								<label>{{.i18n.Tr "repo.settings.toc.toc_wiki_file"}}</label>
+							</div>
+						</div>
+						<div class="field">
+							<div class="ui checkbox">
+								<input name="toc_markup_always" type="checkbox" {{if (.Repository.TocMarkupAlways)}}checked{{end}}>
+								<label>{{.i18n.Tr "repo.settings.toc.toc_markup_always"}}</label>
+							</div>
+						</div>
+						<div class="field">
+							<div class="ui checkbox">
+								<input name="toc_markup_by_flag" type="checkbox" {{if (.Repository.TocMarkupByFlag)}}checked{{end}}>
+								<label>{{.i18n.Tr "repo.settings.toc.toc_markup_by_flag"}}</label>
+							</div>
+						</div>
+					</div>
+				</div>
+				<div class="ui divider"></div>
 				<div class="field">
 					<button class="ui green button">{{$.i18n.Tr "repo.settings.update_settings"}}</button>
 				</div>

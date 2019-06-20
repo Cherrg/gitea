@@ -1136,18 +1136,21 @@ function initWikiForm() {
             forceSync: true,
             previewRender: function (plainText, preview) { // Async method
                 setTimeout(function () {
-                    // FIXME: still send render request when return back to edit mode
-                    $.post($editArea.data('url'), {
-                            "_csrf": csrf,
-                            "mode": "gfm",
-                            "context": $editArea.data('context'),
-                            "text": plainText
-                        },
-                        function (data) {
-                            preview.innerHTML = '<div class="markdown">' + data + '</div>';
-                            emojify.run($('.editor-preview')[0]);
-                        }
-                    );
+                    let $toolbar = $(preview).closest('.CodeMirror-wrap').prev();
+                    if ($toolbar.hasClass('disabled-for-preview')) {
+                        $.post($editArea.data('url'), {
+                                "_csrf": csrf,
+                                "mode": "gfm",
+                                "wiki": true,
+                                "context": decodeURIComponent($editArea.data('context')),
+                                "text": plainText
+                            },
+                            function (data) {
+                                preview.innerHTML = '<div class="markdown">' + data + '</div>';
+                                emojify.run($('.editor-preview')[0]);
+                            }
+                        );
+                    }
                 }, 0);
 
                 return "Loading...";
@@ -3034,3 +3037,295 @@ function onOAuthLoginClick() {
         oauthNav.show();
     },5000);
 }
+(function() {
+    // html listings ----------------------------------------------------
+    let openedLists, listEopen;
+    // close list
+    const _closeList = function (count) {
+        let out = '';
+        if(count == false || count == 0 || count == 'undefined' || typeof(count) == 'undefined' ) {
+            count = openedLists.length;
+        } else {
+            count = Math.min(count, openedLists.length);
+        }
+        while (count > 0){
+            out += '</li>' + openedLists.pop();
+            listEopen = true;
+            count--;
+        }
+        return out;
+    };
+    // open list
+    const _openList = function () {
+        let out = '<ul>';
+        openedLists.push('</ul>');
+        listEopen = false;
+        return out;
+    };
+    // handle list element
+    // create valid html list
+    const __list = function (line, level, id) {
+        let out = '';
+        let diff = level - openedLists.length;
+        if(diff > 0) { //open new level
+            out += _openList();
+            out += __list(line,level, id);
+        }  else if(diff < 0 ) {
+            out += _closeList(-diff);
+            out += __list(line, level, id);
+        } else { // only add list element
+            out += ((listEopen)?'</li>':'') + '<li><a href="#' + id + '" rel="nofollow">' + line + '</a>';
+            listEopen = true;
+        }
+        return out;
+    };
+    // handle wiki page list element
+    // create valid html list
+    const __page_list = function (line, level, link, selected, error) {
+        let out = '';
+        let diff = level - openedLists.length;
+        if(diff > 0) { //open new level
+            out += _openList();
+            out += __page_list(line,level, link, selected, error);
+        }  else if(diff < 0 ) {
+            out += _closeList(-diff);
+            out += __page_list(line, level, link, selected, error);
+        } else { // only add list element
+            let t = (link === null)? 'span' : 'a';
+            let ref = (link === null)? '':' href="' + link + '"';
+            let cl = '' + (error === true? ' error': '') + (selected?' selected':'');
+            let l = line;
+            try{
+                l = decodeURIComponent(l);
+                try {
+                    l = decodeURIComponent(l);
+                } catch (e) {
+                    l = decodeURIComponent(line);
+                }
+            } catch (e) {
+                l = line;
+            }
+            out += ((listEopen)?'</li>':'') + '<li><'+t+' class="'+cl+'"'+ref+'>' + escapeHtml(l) + '</'+t+'>';
+            listEopen = true;
+        }
+        return out;
+    };
+    /**
+     * find headlines and create list ----------------------------------
+     * @param target	Element	 target container where toc should be created
+     */
+    const create_toc_inside = function(target) {
+        let rm;
+        if(target != null) {
+            if( (rm = target.querySelector('.auto-toc-wrapper')) != null ) {
+                rm.parentNode.removeChild(rm);
+            }
+            //remove optional toc flag
+            let ps = target.querySelectorAll('p');
+            //look for toc keywoard
+            for (let i = 0; i < ps.length; i++) {
+                if (ps[i].textContent.trim() == '%%TOC%%') {
+                    ps[i].parentNode.removeChild(ps[i]);
+                }
+            }
+            openedLists = []; listEopen = false;
+            // get content and create html
+            const elms = target.querySelectorAll('h1,h2,h3,h4,h5');
+            if (elms.length > 0) {
+                let html = '';
+                for(let i = 0; i < elms.length; i++){
+                    let l = elms[i].tagName.substr(1); //level
+                    let t = elms[i].innerText.trim().trim(''); //text
+                    let id = elms[i].id;
+                    // create html
+                    if(t.length > 0 && l >= 1) {
+                        html += __list(t, l, id);
+                    } else {
+                        html += _closeList(0);
+                    }
+                }
+                html += _closeList(0);
+                //create elements
+                let d = document.createElement('div');
+                d.id = 'auto-toc';
+                d.className = 'anchor-wrap';
+                d.innerHTML = '<h2>'+((typeof(target.dataset.toc) == 'string' && target.dataset.toc != '')?target.dataset.toc:'Table of Contents')+'</h2>';
+                let d2 = document.createElement('div');
+                d2.className = 'auto-toc-container';
+                d2.innerHTML = html;
+                d2.insertBefore(d, d2.firstChild);
+                let c = document.createElement('div');
+                c.className = 'auto-toc-wrapper';
+                c.appendChild(d2);
+                //inject toc
+                target.insertBefore(c, target.firstChild);
+                if( (rm = document.querySelector('.auto-toc-clear')) != null ) {
+                    rm.parentNode.removeChild(rm);
+                }
+                let a = document.createElement('div'); a.className = 'auto-toc-clear';
+                target.appendChild(a);
+            }
+        }
+    };
+    /**
+     * search for %%TOC%% inside document if found create toc --------------------------
+     * @param target	Element	target container where toc should be created
+     */
+    const detect_toc_flag = function(target) {
+        if(target != null) {
+            let ps = target.querySelectorAll('p');
+            let found = false;
+            //look for toc keywoard
+            for (let i = 0; i < ps.length; i++) {
+                if (ps[i].textContent.trim() == '%%TOC%%') {
+                    found = ps[i];
+                    break;
+                }
+            }
+            if(found !== false) {
+                //remove toc keywoard
+                found.parentNode.removeChild(found);
+                //create toc
+                create_toc_inside(target);
+            }
+        }
+    };
+    const escapeHtml = function (text) {
+        var map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        };
+        return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+    }
+    // wiki page toc
+    // wiki page toc
+    const wiki_page_toc = function(target, data) {
+        let rm;
+        if(target != null && data != null) {
+            //remove page toc
+            if( (rm = document.querySelector('.page-toc-wrapper')) != null ) {
+                rm.parentNode.removeChild(rm);
+            }
+            if (data.length > 0) {
+                //get base path
+                let dl = [], tl = [];
+                let l = '';
+                let ll = 0;
+                for(let i = 0; i < data.length; i++){
+                    if (i == 0) {
+                        ll = data[i].dataset.url.indexOf('/wiki/', 0) + 6;
+                        l = data[i].dataset.url.substr(0, ll);
+                    }
+                    let o = {li: data[i].dataset.url.substr(ll), t: '', l: 0, s: false, p: '', al:true};
+                    o.l = (o.li.match(/(\/|%2F|%252F)/g) || []).length + 1;
+                    let lisplit = o.li.split(/%252F|%2F|\//g);
+                    o.t = lisplit.pop();
+                    o.p = lisplit.join('%2F');
+                    tl.push(o.li);
+                    if (data[i].className.indexOf('selected') != -1) o.s = true;
+                    //add missing objects without link
+                    dl.push(o);
+                }
+                // compare paths
+                const sortArr = function(a, b){
+                    let _a = decodeURIComponent(a.li).toLowerCase().split('/');
+                    let _b = decodeURIComponent(b.li).toLowerCase().split('/');
+                    // split and compare path components
+                    for (let i = 0; i < Math.max(_a.length, _b.length); i++ ) {
+                        // end if one path is shorter
+                        if (i >= _a.length) return -1;
+                        if (i >= _b.length) return 1;
+                        // compare string components
+                        if(_a[i] < _b[i]) return -1;
+                        if(_a[i] > _b[i]) return 1;
+                    }
+                    // equals
+                    return 0;
+                };
+                dl.sort(sortArr);
+                // fill missing elements
+                for(let i = 0; i < dl.length; i++){
+                    if (dl[i].p != ''){
+                        let pathsplit = dl[i].p.split('%2F');
+                        for(let j = 0; j < pathsplit.length; j++){
+                            let p = pathsplit.slice(0, j + 1).join('%2F');
+                            if (p != '' && tl.indexOf(p) == -1){
+                                let o = {li: p, t: '', l: (p.match(/(\/|%2F|%252F)/g) || []).length + 1, s: false, p: '', al:false};
+                                let lisplit = o.li.split(/%252F|%2F|\//g);
+                                o.t = lisplit.pop();
+                                tl.push(p);
+                                //add missing objects without link
+                                dl.push(o);
+                            }
+                        }
+                    }
+                }
+                dl.sort(sortArr);
+                //create list
+                openedLists = []; listEopen = false;
+                // get content and create html
+                let html = '';
+                let last_link = '';
+                for(let i = 0; i < dl.length; i++){
+                    // create html
+                    if(dl[i].t.length > 0 && dl[i].l >= 1) {
+                        html += __page_list( dl[i].t, dl[i].l, (dl[i].al? l+dl[i].li : null), dl[i].s, (last_link !== l+dl[i].li && decodeURIComponent(last_link) !== l+dl[i].li && last_link !== decodeURIComponent(l+dl[i].li))? false : true );
+                    } else {
+                        html += _closeList(0);
+                    }
+                    last_link = l+dl[i].li;
+                }
+                html += _closeList(0);
+                //create elements
+                let d = document.createElement('div');
+                d.id = 'auto-page-toc';
+                d.className = 'anchor-wrap';
+                d.innerHTML = '<h2>'+((typeof(target.dataset.pagetoc) == 'string' && target.dataset.pagetoc != '')?target.dataset.pagetoc:'Table of Pages')+'<label for="page-toc-wiki-cb" class="page-toc-close ui basic button"><i class="fa fa-fw fa-times"></i></label></h2>';
+                let d2 = document.createElement('div');
+                d2.className = 'auto-toc-container';
+                d2.innerHTML = html;
+                d2.insertBefore(d, d2.firstChild);
+                let c = document.createElement('div');
+                c.className = 'page-toc-wrapper';
+                c.appendChild(d2);
+                //inject page toc
+                target.insertBefore(c, target.firstChild);
+                if( (rm = document.querySelector('.auto-toc-clear')) == null ) {
+                    let a = document.createElement('div'); a.className = 'auto-toc-clear';
+                    target.appendChild(a);
+                }
+                // small screen toggle
+                if( (rm = document.querySelector('.page-toc-label')) == null ) {
+                    let a = document.createElement('label');
+                    a.className = 'page-toc-wiki-label ui basic button'; a.htmlFor = 'page-toc-wiki-cb';
+                    a.title = ((typeof(target.dataset.pagetoc) == 'string' && target.dataset.pagetoc != '')?target.dataset.pagetoc:'Table of Pages');
+                    a.innerHTML = '<i class="fa fa-fw fa-list-ul"></i>';
+                    let ltarget = document.querySelector('.repository.wiki .ui.container .ui.dividing.header .ui.stackable.grid').firstElementChild;
+                    ltarget.insertBefore(a, ltarget.firstChild);
+                    let cb = document.createElement('input');
+                    cb.type = 'checkbox'; cb.id = 'page-toc-wiki-cb'; cb.hidden = true;
+                    target.insertBefore(cb, target.firstChild);
+                    // may update height if toc size > container
+                    cb.addEventListener("click", function(){
+                        if (cb.checked && target.offsetHeight < c.offsetHeight) {
+                            target.style.minHeight = c.offsetHeight + 'px';
+                        } else {
+                            target.style.removeProperty('min-height');
+                        }
+                        return false;
+                    });
+                }
+            }
+        }
+    };
+    // create toc ----------------------------------
+    addEventListener("load", function(){
+        create_toc_inside(document.querySelector('.file-view.markdown.auto-toc')); // md
+        detect_toc_flag(  document.querySelector('.file-view.markdown.auto-toc-by-flag')); // md by %%TOC%% flag
+        create_toc_inside(document.querySelector('.segment.markdown.auto-toc')); // wiki pages
+        wiki_page_toc(document.querySelector('.segment.markdown.page-toc'), document.querySelectorAll('.wiki .choose.page .menu .item')); // wiki pages toc
+    });
+})();

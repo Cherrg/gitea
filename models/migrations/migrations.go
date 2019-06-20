@@ -229,6 +229,10 @@ var migrations = []Migration{
 	NewMigration("add http method to webhook", addHTTPMethodToWebhook),
 	// v87 -> v88
 	NewMigration("add avatar field to repository", addAvatarFieldToRepository),
+	// v88 -> v89
+	NewMigration("add toc on wiki and markedown", addCanTocOnWikiAndMarkdown),
+	// v89 -> v90
+	NewMigration("add pagetoc to wiki", addCanWikiPageToc),
 }
 
 // Migrate database to current version

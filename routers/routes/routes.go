@@ -808,9 +808,10 @@ func RegisterRoutes(m *macaron.Macaron) {
 			m.Group("", func() {
 				m.Combo("/_new").Get(repo.NewWiki).
 					Post(bindIgnErr(auth.NewWikiForm{}), repo.NewWikiPost)
+				m.Get("/:page/_new/", repo.NewWiki)
 				m.Combo("/:page/_edit").Get(repo.EditWiki).
 					Post(bindIgnErr(auth.NewWikiForm{}), repo.EditWikiPost)
-				m.Post("/:page/delete", repo.DeleteWikiPagePost)
+				m.Post("/:page/_delete", repo.DeleteWikiPagePost)
 			}, context.RepoMustNotBeArchived(), reqSignIn, reqRepoWikiWriter)
 		}, repo.MustEnableWiki, context.RepoRef())
 
