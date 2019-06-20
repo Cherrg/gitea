@@ -1128,32 +1128,62 @@ function initTeamSettings() {
 }
 
 function initWikiForm() {
-    var $editArea = $('.repository.wiki textarea#edit_area');
+    let $editArea = $('.repository.wiki textarea#edit_area');
+    let sideBySideChanges = 0;
+    let sideBySideTimeout = null;
     if ($editArea.length > 0) {
-        var simplemde = new SimpleMDE({
+        let simplemde = new SimpleMDE({
             autoDownloadFontAwesome: false,
             element: $editArea[0],
             forceSync: true,
             previewRender: function (plainText, preview) { // Async method
                 setTimeout(function () {
                     let $toolbar = $(preview).closest('.CodeMirror-wrap').prev();
-                    if ($toolbar.hasClass('disabled-for-preview')) {
-                        $.post($editArea.data('url'), {
-                                "_csrf": csrf,
-                                "mode": "gfm",
-                                "wiki": true,
-                                "context": decodeURIComponent($editArea.data('context')),
-                                "text": plainText
-                            },
-                            function (data) {
-                                preview.innerHTML = '<div class="markdown">' + data + '</div>';
-                                emojify.run($('.editor-preview')[0]);
+                    if (/(editor-preview-active-side)/.test(preview.className) || $toolbar.length > 0 && $toolbar.hasClass('disabled-for-preview') ) {
+                        const render = function () {
+                            sideBySideChanges = 0;
+                            if (sideBySideTimeout != null) {
+                                clearTimeout(sideBySideTimeout);
+                                sideBySideTimeout = null;
                             }
-                        );
+                            $.post($editArea.data('url'), {
+                                    "_csrf": csrf,
+                                    "mode": "gfm",
+                                    "wiki": true,
+                                    "context": decodeURIComponent($editArea.data('context')),
+                                    "text": plainText
+                                },
+                                function (data) {
+                                    preview.innerHTML = '<div class="markdown">' + data + '</div>';
+                                    emojify.run($('.editor-preview')[0]);
+                                    $(preview).find('pre code').each(function (_, e) {
+                                        hljs.highlightBlock(e);
+                                    });
+                                }
+                            );
+                        };
+                        if (!simplemde.isSideBySideActive()) {
+                            render();
+                        } else {
+                            // delay preview by keystroke counting
+                            sideBySideChanges++;
+                            if (sideBySideChanges > 10) {
+                                render();
+                            }
+                            // or delay preview by timeout
+                            if (sideBySideTimeout != null) {
+                                clearTimeout(sideBySideTimeout);
+                                sideBySideTimeout = null;
+                            }
+                            sideBySideTimeout = setTimeout(render, 600);
+                        }
                     }
-                }, 0);
-
-                return "Loading...";
+                }, 5);
+                if (!simplemde.isSideBySideActive()){
+                    return "Loading...";
+                } else {
+                    return preview.innerHTML;
+                }
             },
             renderingConfig: {
                 singleLineBreaks: false
@@ -1199,7 +1229,7 @@ function initWikiForm() {
                 }, "|",
                 "unordered-list", "ordered-list", "|",
                 "link", "image", "table", "horizontal-rule", "|",
-                "clean-block", "preview", "fullscreen"]
+                "clean-block", "preview", "fullscreen", "side-by-side"],
         });
         $(simplemde.codemirror.getInputField()).addClass("js-quick-submit");
 
@@ -1208,6 +1238,7 @@ function initWikiForm() {
             let $bPrev = $('.repository.wiki.new .previewtabs a[data-tab="preview"]');
             let $toolbar = $('.editor-toolbar');
             let $bPreview = $('.editor-toolbar a.fa-eye');
+            let $bSideBySide = $('.editor-toolbar a.fa-columns');
             $bEdit.on('click', function () {
                 if ($toolbar.hasClass('disabled-for-preview')){
                     $bPreview.click();
@@ -1236,6 +1267,9 @@ function initWikiForm() {
                         }
                     }
                 }, 5);
+            });
+            $bSideBySide.on('click', function(){
+                sideBySideChanges=10;
             });
         },5);
     }
